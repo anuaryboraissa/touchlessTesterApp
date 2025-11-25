@@ -1,0 +1,2 @@
+-keep class com.example.touchless_fingerprint.** { *; }
+-keep class com.example.touchless_fingerprint.screens.** { *; }
