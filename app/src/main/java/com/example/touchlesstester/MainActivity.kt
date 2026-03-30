@@ -19,7 +19,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
-import com.example.touchless_fingerprint.TouchlessMainActivity
+import com.example.touchless_fingerprint.api.TouchlessFingerprintSDK
+//import com.example.touchless_fingerprint.internal.TouchlessMainActivity
+
 import com.example.touchless_fingerprint.screens.DeviceHashActivity
 
 import com.google.android.material.button.MaterialButton
@@ -50,6 +52,32 @@ class MainActivity : AppCompatActivity() {
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
         return Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
     }
+
+    fun mapFingers(json: String): List<ResponseFingersData> {
+        val arr = org.json.JSONArray(json)
+        val list = mutableListOf<ResponseFingersData>()
+
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+
+            val item = ResponseFingersData(
+                imageName = obj.optString("a"),
+                grayscalePath = obj.optString("b"),
+                nfiqScore = obj.optInt("c"),
+                wsqPath = obj.optString("d"),
+                binaryPath = obj.optString("e"),
+                imageWidth = obj.optInt("f"),
+                imageHeight = obj.optInt("g"),
+                imageDp = obj.optInt("h")
+            )
+
+            list.add(item)
+        }
+
+        return list
+    }
+
+
     fun wsqFileToBase64(filePath: String): String? {
         val wsqFile = File(filePath)
         if (!wsqFile.exists()) return null
@@ -143,11 +171,11 @@ class MainActivity : AppCompatActivity() {
             if (id.isEmpty() && !isBunchMode) return@setOnClickListener
 
             // Open plugin
-            TouchlessMainActivity().openCameraPreview(
+            TouchlessFingerprintSDK.INSTANCE.openCameraPreview(
                 this,
-                enrollID = if(id.isEmpty()) null else id,
-                isLeftHand = isLeftHand,
-                isEnrollment = isEnrollMode
+                if (id.isEmpty()) null else id,
+                isLeftHand,
+                isEnrollMode
             )
         }
         updateStartButtonState()
@@ -162,6 +190,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+//        val value = data?.extras?.keySet();
+//        Log.i("TESTER_APP", "This data  result $key, value $value")
         if (requestCode == 1001 && resultCode == Activity.RESULT_OK) {
             displayResultsRealtime(data)
         }
@@ -195,17 +225,20 @@ class MainActivity : AppCompatActivity() {
             when (key.lowercase()) {
                 "imagepath", "imagename" -> {
                     value?.toString()?.let { path ->
-                        val file = File(path)
-                        if (file.exists()) {
-                            val imageView = ImageView(this).apply {
-                                layoutParams = LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, 500
-                                ).apply { bottomMargin = 12 }
-                                scaleType = ImageView.ScaleType.CENTER_CROP
-                                setImageURI(file.toUri())
+                        if (!path.isNullOrBlank()) {
+                            val file = File(path)
+                            if (file.exists()) {
+                                val imageView = ImageView(this).apply {
+                                    layoutParams = LinearLayout.LayoutParams(
+                                        LinearLayout.LayoutParams.MATCH_PARENT, 500
+                                    ).apply { bottomMargin = 12 }
+                                    scaleType = ImageView.ScaleType.CENTER_CROP
+                                    setImageURI(file.toUri())
+                                }
+                                container.addView(imageView)
                             }
-                            container.addView(imageView)
                         }
+
                     }
                 }
 
@@ -249,7 +282,8 @@ class MainActivity : AppCompatActivity() {
 
                 "fingersdata" -> {
                     val converter = FingersDataConverter()
-                    val restoredData = runCatching { converter.fromJson(value as String) }.getOrNull()
+//                    val restoredData = runCatching { converter.fromJson(value as String) }.getOrNull()
+                    val restoredData = mapFingers(value as String)
                     restoredData?.forEachIndexed { index, finger ->
                         val fingerContainer = LinearLayout(this).apply {
                             orientation = LinearLayout.VERTICAL
@@ -286,41 +320,45 @@ class MainActivity : AppCompatActivity() {
                             finger.wsqPath to "WSQ",
                             finger.binaryPath to "Binary"
                         ).forEach { (path, label) ->
-                            val file = File(path)
-                            if (file.exists()) {
-                                val imgLayout = LinearLayout(this).apply {
-                                    orientation = LinearLayout.VERTICAL
-                                    layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-                                        marginEnd = 8
+
+                            if (!path.isNullOrBlank()) {
+                                val file = File(path)
+                                if (file.exists()) {
+                                    val imgLayout = LinearLayout(this).apply {
+                                        orientation = LinearLayout.VERTICAL
+                                        layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
+                                            marginEnd = 8
+                                        }
                                     }
-                                }
 
-                                val imgView = ImageView(this).apply {
-                                    layoutParams = LinearLayout.LayoutParams(
-                                        LinearLayout.LayoutParams.MATCH_PARENT, 500
-                                    )
-                                    scaleType = ImageView.ScaleType.CENTER_CROP
+                                    val imgView = ImageView(this).apply {
+                                        layoutParams = LinearLayout.LayoutParams(
+                                            LinearLayout.LayoutParams.MATCH_PARENT, 500
+                                        )
+                                        scaleType = ImageView.ScaleType.CENTER_CROP
 
-                                    if (path.endsWith(".wsq", true)) {
-                                        // ❌ Android cannot display WSQ directly
-                                        // ✅ Show a placeholder instead
-                                        setImageResource(R.drawable.bg_card_rounded)
-                                    } else {
-                                        setImageURI(file.toUri())
+                                        if (path.endsWith(".wsq", true)) {
+                                            // ❌ Android cannot display WSQ directly
+                                            // ✅ Show a placeholder instead
+                                            setImageResource(R.drawable.bg_card_rounded)
+                                        } else {
+                                            setImageURI(file.toUri())
+                                        }
                                     }
-                                }
 
-                                val caption = TextView(this).apply {
-                                    text = label
-                                    gravity = Gravity.CENTER
-                                    textSize = 12f
-                                    setTextColor(Color.DKGRAY)
-                                }
+                                    val caption = TextView(this).apply {
+                                        text = label
+                                        gravity = Gravity.CENTER
+                                        textSize = 12f
+                                        setTextColor(Color.DKGRAY)
+                                    }
 
-                                imgLayout.addView(imgView)
-                                imgLayout.addView(caption)
-                                imageRow.addView(imgLayout)
+                                    imgLayout.addView(imgView)
+                                    imgLayout.addView(caption)
+                                    imageRow.addView(imgLayout)
+                                }
                             }
+
                         }
                         fingerContainer.addView(imageRow)
 
@@ -359,43 +397,46 @@ class MainActivity : AppCompatActivity() {
                         val openBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
                             text = "Open"
                             setOnClickListener {
-                                val file = File(finger.grayscalePath)
-                                if (file.exists()) {
-                                    val uri = FileProvider.getUriForFile(
-                                        this@MainActivity,
-                                        "${packageName}.provider", // must match the authority in Manifest
-                                        file
-                                    )
+                                if (!finger.grayscalePath.isNullOrBlank()) {
+                                    val file = File(finger.grayscalePath)
+                                    if (file.exists()) {
+                                        val uri = FileProvider.getUriForFile(
+                                            this@MainActivity,
+                                            "${packageName}.provider", // must match the authority in Manifest
+                                            file
+                                        )
 
-                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(uri, "image/*")
-                                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, "image/*")
+                                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                        }
+                                        startActivity(intent)
                                     }
-                                    startActivity(intent)
                                 }
-
                             }
                         }
 
                         val shareBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
                             text = "Share"
                             setOnClickListener {
-                                val file = File(finger.grayscalePath)
-                                if (file.exists()) {
-                                    val uri = FileProvider.getUriForFile(
-                                        this@MainActivity,
-                                        "${packageName}.provider", // same authority as in Manifest
-                                        file
-                                    )
+                                if (!finger.grayscalePath.isNullOrBlank()) {
+                                    val file = File(finger.grayscalePath)
+                                    if (file.exists()) {
+                                        val uri = FileProvider.getUriForFile(
+                                            this@MainActivity,
+                                            "${packageName}.provider", // same authority as in Manifest
+                                            file
+                                        )
 
-                                    val shareIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        type = "image/*"
-                                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                        val shareIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            type = "image/*"
+                                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                        }
+
+                                        startActivity(Intent.createChooser(shareIntent, "Share via"))
                                     }
-
-                                    startActivity(Intent.createChooser(shareIntent, "Share via"))
                                 }
                             }
                         }
@@ -404,49 +445,52 @@ class MainActivity : AppCompatActivity() {
                         actions.addView(shareBtn)
                         fingerContainer.addView(actions)
 
+                        if (!finger.wsqPath.isNullOrBlank()) {
 
-                        val file = File(finger.wsqPath)
-                        if (file.exists()) {
-                            val uri = FileProvider.getUriForFile(
-                                this,
-                                "${packageName}.provider",
-                                file
-                            )
-                            // Share raw WSQ file
-                            val shareFileBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                                text = "Share WSQ"
-                                setOnClickListener {
-                                    val shareIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        type = "application/octet-stream"
-                                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                    }
-                                    startActivity(Intent.createChooser(shareIntent, "Share WSQ via"))
-                                }
-                            }
-
-                            // Decode WSQ → Base64 → share as text
-                            val shareBase64Btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                                text = "Share WSQ Base64"
-                                setOnClickListener {
-                                    try {
-                                        val wsqBase64 = wsqFileToBase64(finger.wsqPath)
+                            val file = File(finger.wsqPath)
+                            if (file.exists()) {
+                                val uri = FileProvider.getUriForFile(
+                                    this,
+                                    "${packageName}.provider",
+                                    file
+                                )
+                                // Share raw WSQ file
+                                val shareFileBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                                    text = "Share WSQ"
+                                    setOnClickListener {
                                         val shareIntent = Intent().apply {
                                             action = Intent.ACTION_SEND
-                                            putExtra(Intent.EXTRA_TEXT, wsqBase64)
-                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            type = "application/octet-stream"
+                                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                                         }
-                                        startActivity(Intent.createChooser(shareIntent, "Share WSQ Base64 via"))
-                                    } catch (e: Exception) {
-                                        Toast.makeText(this@MainActivity, "Failed to decode WSQ", Toast.LENGTH_SHORT).show()
+                                        startActivity(Intent.createChooser(shareIntent, "Share WSQ via"))
                                     }
                                 }
-                            }
 
-                            wsq_ctions.addView(shareFileBtn)
-                            wsq_ctions.addView(shareBase64Btn)
+                                // Decode WSQ → Base64 → share as text
+                                val shareBase64Btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                                    text = "Share WSQ Base64"
+                                    setOnClickListener {
+                                        try {
+                                            val wsqBase64 = wsqFileToBase64(finger.wsqPath)
+                                            val shareIntent = Intent().apply {
+                                                action = Intent.ACTION_SEND
+                                                putExtra(Intent.EXTRA_TEXT, wsqBase64)
+                                                type = "text/plain"
+                                            }
+                                            startActivity(Intent.createChooser(shareIntent, "Share WSQ Base64 via"))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(this@MainActivity, "Failed to decode WSQ", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+
+                                wsq_ctions.addView(shareFileBtn)
+                                wsq_ctions.addView(shareBase64Btn)
+                            }
                         }
+
 
                         fingerContainer.addView(wsq_ctions)
 

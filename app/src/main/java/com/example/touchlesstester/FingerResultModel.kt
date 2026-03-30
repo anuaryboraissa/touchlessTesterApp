@@ -13,3 +13,6 @@ data class ResponseFingersData(
     val imageHeight: Int,
     val imageDp: Int
 ): Serializable
+
+
+

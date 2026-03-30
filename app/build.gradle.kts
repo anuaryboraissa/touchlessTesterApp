@@ -89,35 +89,14 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.cardview:cardview:1.0.0")
     implementation(files("libs/touchless_fingerprint.aar"))
-//    implementation("com.google.protobuf:protobuf-javalite:3.24.1")
-//    // Google Data Transport required by MediaPipe
-//    implementation("com.google.android.datatransport:transport-api:3.1.9")
-//    implementation("com.google.android.datatransport:transport-runtime:3.1.9")
-//    implementation("com.google.android.datatransport:transport-backend-cct:3.1.9")
 
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     // CameraX
-//    // JSON + UI
-//    implementation("com.google.code.gson:gson:2.10.1")
-//    implementation("com.airbnb.android:lottie:6.1.0")
-//
-//    // Kotlin Coroutines + Lifecycle
-//    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-//    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
-//    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
-//
-//    // Testing
-//    testImplementation("org.jetbrains.kotlin:kotlin-test")
-//    testImplementation("org.mockito:mockito-core:5.0.0")
-//
-//    // TensorFlow Lite
-//    implementation("org.tensorflow:tensorflow-lite:2.13.0")
-//    implementation("org.tensorflow:tensorflow-lite-support:0.4.3")
-//    implementation("org.tensorflow:tensorflow-lite-gpu:2.13.0")
-//
-//    // MediaPipe
+
+    implementation("com.google.code.gson:gson:2.11.0")
+
+
     implementation("com.google.mediapipe:tasks-vision:latest.release")
 
-//    implementation("com.google.guava:guava:31.1-android")
 }
